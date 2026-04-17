@@ -7,14 +7,6 @@
   "exports": {
     ".": "./index.js"
   },
-  "files": [
-    "index.js",
-    "core",
-    "geometry",
-    "layout",
-    "ontology",
-    "utils"
-  ],
   "keywords": ["graph", "headless", "directed-graph", "layout", "ontology"],
   "license": "MIT",
   "publishConfig": {
