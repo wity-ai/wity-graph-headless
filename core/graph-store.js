@@ -54,6 +54,10 @@ export class GraphStore extends EventBus {
     // has no availableStyleConfig of its own. Stored opaquely.
     #defaultStyleConfig = [];
 
+    // Graph-level default context-menu actions — fallback when a node has no
+    // contextMenuActions of its own. Stored opaquely; no semantic processing here.
+    #defaultContextMenuActions = [];
+
     // Batching — defer events until a batch() block completes
     #batchDepth    = 0;
     #pendingEvents = new Map();   // event → latest payload marker
@@ -71,8 +75,27 @@ export class GraphStore extends EventBus {
     setDefaultActions(actions)         { this.#defaultActions     = actions; }
     getDefaultActions()                { return this.#defaultActions; }
 
-    setDefaultStyleConfig(config)      { this.#defaultStyleConfig = config; }
-    getDefaultStyleConfig()            { return this.#defaultStyleConfig; }
+    setDefaultStyleConfig(config)           { this.#defaultStyleConfig           = config; }
+    getDefaultStyleConfig()                 { return this.#defaultStyleConfig; }
+
+    setDefaultContextMenuActions(actions)   { this.#defaultContextMenuActions   = actions; }
+    getDefaultContextMenuActions()          { return this.#defaultContextMenuActions; }
+
+    /**
+     * Resolve context-menu actions for a single node.
+     * Uses per-node contextMenuActions if set, otherwise falls back to graph defaults.
+     * Pure data — no DOM concern.
+     *
+     * @param {string} uid
+     * @returns {object[]}
+     */
+    resolveContextMenuActions(uid) {
+        const node = this.#nodes.get(uid);
+        if (!node) return [];
+        return node.contextMenuActions?.length
+            ? node.contextMenuActions
+            : this.#defaultContextMenuActions;
+    }
 
     /**
      * Resolve the applicable action set for a given selection.
@@ -154,6 +177,9 @@ export class GraphStore extends EventBus {
             availableStyleConfig: undefined,
             // showStylePanel — set to false to suppress the per-node style overlay.
             showStylePanel:      true,
+            // contextMenuActions — per-node context menu actions.
+            // undefined = use graph-level default (set via store.setDefaultContextMenuActions).
+            contextMenuActions:  undefined,
             // Caller data (overrides defaults)
             ...data,
             // Normalised field aliases — must come after spread
