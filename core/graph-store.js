@@ -180,6 +180,18 @@ export class GraphStore extends EventBus {
             // contextMenuActions — per-node context menu actions.
             // undefined = use graph-level default (set via store.setDefaultContextMenuActions).
             contextMenuActions:  undefined,
+            // ─── Actor attribution ───────────────────────────────────────────
+            // Carried opaquely — no semantic processing in the headless layer.
+            // Use ActorRegistry to resolve actorId strings to display metadata.
+            //
+            // createdBy  {string}    — actorId of the actor who created this node.
+            //                          Single value; immutable once set by the caller.
+            // updatedBy  {string[]}  — actorIds of all actors who have modified this node.
+            //                          Treated as a contributors list (append-only by convention).
+            //                          Does not preserve temporal order or frequency —
+            //                          use SessionLog for the full per-actor audit trail.
+            createdBy:  undefined,
+            updatedBy:  undefined,
             // Caller data (overrides defaults)
             ...data,
             // Normalised field aliases — must come after spread
@@ -280,6 +292,12 @@ export class GraphStore extends EventBus {
             // Pre-resolved render style — renderer reads this directly, no headless import needed.
             style:        getLinkTypeConfig(edgeType).style,
             path:         computeNodeLinkPath(src, tgt, getNodeTypeConfig, srcPortId, tgtPortId),
+            // ─── Actor attribution ───────────────────────────────────────────
+            // Carried opaquely — same conventions as on nodes.
+            // createdBy  {string}    — actorId who created this edge
+            // updatedBy  {string[]}  — actorIds who have modified this edge
+            createdBy: data.createdBy,
+            updatedBy: data.updatedBy,
         };
 
         this.#edges.set(edge.uid, edge);

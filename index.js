@@ -21,6 +21,10 @@
  *   ├──────────┴──────────────────────────────┴────────────────┤
  *   │  Ontology  (node-types, link-types — BFO grounded)       │
  *   ├──────────────────────────────────────────────────────────┤
+ *   │  Actors & Session                                        │
+ *   │  ActorRegistry · SessionLog · PresenceState              │
+ *   │  Independent of graph structure; layered on top.         │
+ *   ├──────────────────────────────────────────────────────────┤
  *   │  EventBus  ·  BatchProcessor  (infrastructure)           │
  *   └──────────────────────────────────────────────────────────┘
  *
@@ -82,6 +86,25 @@ export {
     getLinkTypeConfig,
     registerLinkType,
 } from './ontology/link-types.js';
+
+// ─── Actors & Session ─────────────────────────────────────────────────────────
+// Independent of graph structure. Layered on top without modifying any core state.
+//
+// ActorRegistry  — lookup store mapping actorId strings to flexible metadata
+//                  (nickname, color, avatar, type, etc.). Plain lookup, no reactivity.
+//                  The graph layer carries only the opaque string IDs.
+//
+// SessionLog     — append-only event log. Auto-captures GraphStore mutations if a store
+//                  is provided; also accepts external events via record() (cursors, etc.).
+//                  Emits 'session:event' on every append.
+//
+// PresenceState  — live per-actor snapshot derived from session events.
+//                  Maintains cursor positions (SVG space) + active selections per actor.
+//                  Emits 'presence:updated' for real-time cursor/highlight rendering.
+
+export { ActorRegistry }  from './core/actor-registry.js';
+export { SessionLog }     from './core/session-log.js';
+export { PresenceState }  from './core/presence-state.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
