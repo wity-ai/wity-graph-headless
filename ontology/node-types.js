@@ -34,11 +34,10 @@ export const NODE_TYPES = {
             height:   272,   // px
         },
         ports: {
-            // yFraction: 120/272 ≈ 0.44  →  y = 120px  (matches previous linkYOffset)
-            // xOffset input 25  →  x = node.x + 25     (matches previous containerLMargin)
-            // xOffset output 5  →  x = node.x + 235    (matches previous linkXOffset - containerRMargin)
-            inputs:  [{ id: 'in',  side: 'input',  yFraction: 0.44, xOffset: 25, style: { color: '#6b7280', radius: 6 } }],
-            outputs: [{ id: 'out', side: 'output', yFraction: 0.44, xOffset: 5,  style: { color: '#6b7280', radius: 6 } }],
+            // yFraction: 120/272 ≈ 0.44  →  y = 120px  (vertically centered on node face)
+            // xOffset 0 on both sides  →  dot sits exactly on the node border
+            inputs:  [{ id: 'in',  side: 'input',  yFraction: 0.44, xOffset: 0, style: { color: '#6b7280', radius: 6 } }],
+            outputs: [{ id: 'out', side: 'output', yFraction: 0.44, xOffset: 0, style: { color: '#6b7280', radius: 6 } }],
         },
         style: {
             containerClass: 'p-3 overflow-visible relative',
@@ -58,9 +57,9 @@ export const NODE_TYPES = {
             height:   136,
         },
         ports: {
-            // yFraction: 60/136 ≈ 0.44  →  y = 60px  (matches previous linkYOffset)
-            inputs:  [{ id: 'in',  side: 'input',  yFraction: 0.44, xOffset: 25, style: { color: '#f97316', radius: 5 } }],
-            outputs: [{ id: 'out', side: 'output', yFraction: 0.44, xOffset: 5,  style: { color: '#f97316', radius: 5 } }],
+            // yFraction: 60/136 ≈ 0.44  →  y = 60px  (vertically centered on node face)
+            inputs:  [{ id: 'in',  side: 'input',  yFraction: 0.44, xOffset: 0, style: { color: '#f97316', radius: 5 } }],
+            outputs: [{ id: 'out', side: 'output', yFraction: 0.44, xOffset: 0, style: { color: '#f97316', radius: 5 } }],
         },
         style: {
             containerClass: 'p-3 overflow-visible relative',
