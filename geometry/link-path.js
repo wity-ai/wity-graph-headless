@@ -44,10 +44,18 @@ export function computeNodeLinkPath(srcNode, targetNode, getConfig, srcPortId = 
         return horizontalLinkPath([sx, sy], [tx, ty]);
     }
 
-    // Always render left-to-right visually — swap when the logical source
-    // is to the right of the target (e.g. child→parent edges in a horizontal tree).
+    // Always render left-to-right visually.
+    // When the logical source is to the right of the target (e.g. child→parent in
+    // a horizontal tree), swap which node each portId is applied to — srcPortId ('out')
+    // goes to the visually-left node, tgtPortId ('in') to the visually-right node.
+    // Swapping just the coordinates (without re-fetching ports) would anchor the path
+    // to the wrong dots when nodes differ in height.
     if (src.x > tgt.x) {
-        return horizontalLinkPath([tgt.x, tgt.y], [src.x, src.y]);
+        const vSrc = getPortSvgPos(targetNode, srcPortId, getConfig);
+        const vTgt = getPortSvgPos(srcNode,    tgtPortId, getConfig);
+        if (vSrc && vTgt) {
+            return horizontalLinkPath([vSrc.x, vSrc.y], [vTgt.x, vTgt.y]);
+        }
     }
 
     return horizontalLinkPath([src.x, src.y], [tgt.x, tgt.y]);
