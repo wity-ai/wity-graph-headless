@@ -192,14 +192,15 @@ export class GraphStore extends EventBus {
             //                          use SessionLog for the full per-actor audit trail.
             createdBy:  undefined,
             updatedBy:  undefined,
-            // Caller data (overrides defaults)
+            // Layout state default — caller can override by passing _computedInitialProps: true
+            // alongside explicit x, y to pin the node at a specific position.
+            _computedInitialProps: false,
+            // Caller data (overrides all defaults above, including _computedInitialProps)
             ...data,
             // Normalised field aliases — must come after spread
             uid:     data.uid || randomUid(),
             content: data.content || data.msg || '',
             message: data.rawMsg  || data.message || '',
-            // Layout state — always reset on add so layout recomputes cleanly
-            _computedInitialProps: false,
         };
 
         // pubKey deduplication: a temp node rendered with pubKey as uid,
@@ -208,7 +209,7 @@ export class GraphStore extends EventBus {
             const existing = [...this.#nodes.values()].find(n => n.uid === node.pubKey);
             if (existing) {
                 this.#nodes.delete(existing.uid);
-                this.#nodes.set(node.uid, { ...existing, ...node, _computedInitialProps: false });
+                this.#nodes.set(node.uid, { ...existing, ...node });
                 this.#scheduleEvent('nodes:changed');
                 return this.#nodes.get(node.uid);
             }
