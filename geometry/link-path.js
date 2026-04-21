@@ -44,5 +44,11 @@ export function computeNodeLinkPath(srcNode, targetNode, getConfig, srcPortId = 
         return horizontalLinkPath([sx, sy], [tx, ty]);
     }
 
+    // Always render left-to-right visually — swap when the logical source
+    // is to the right of the target (e.g. child→parent edges in a horizontal tree).
+    if (src.x > tgt.x) {
+        return horizontalLinkPath([tgt.x, tgt.y], [src.x, src.y]);
+    }
+
     return horizontalLinkPath([src.x, src.y], [tgt.x, tgt.y]);
 }
