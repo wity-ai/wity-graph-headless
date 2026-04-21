@@ -12,6 +12,7 @@
  *   'node:removed'        { uid, descendants: node[] } — before removal (SelectionManager auto-deselects)
  *   'node:moved'          { uid, x, y, node }          — after moveNode()
  *   'node:status-changed' { uid, status, node }        — after setNodeStatus()
+ *   'node:style-changed'  { uid, styleObj, node }      — after setNodeStyle()
  */
 
 import { EventBus }  from './event-bus.js';
@@ -171,8 +172,9 @@ export class GraphStore extends EventBus {
             h:              typeCfg.layout.height,
             // variant — renderer extension point. Owned by the UI layer; stored opaquely here.
             variant:        undefined,
-            // styles — per-node custom visual overrides. Plain object, UI layer interprets shape.
-            styles:              undefined,
+            // styleObj — per-node custom visual overrides. Plain object, UI layer interprets shape.
+            // Write via setNodeStyle(uid, styleObj); read via getNodeStyle(uid) or node.styleObj.
+            styleObj:            undefined,
             // availableStyleConfig — overrides graph default style config for this node.
             // undefined = use graph-level default (set via store.setDefaultStyleConfig).
             availableStyleConfig: undefined,
@@ -405,6 +407,33 @@ export class GraphStore extends EventBus {
         this.emit('node:status-changed', { uid, status, node });
     }
 
+    /**
+     * Persist a style object on a node and notify listeners.
+     * This is the single source of truth for per-node styles — always use this
+     * instead of mutating node.styleObj directly so that 'node:style-changed'
+     * fires and presentation layers can update without a full re-render.
+     *
+     * @param {string} uid
+     * @param {object} styleObj  Arbitrary style data — the UI layer defines the shape.
+     */
+    setNodeStyle(uid, styleObj) {
+        const node = this.#nodes.get(uid);
+        if (!node) return;
+        node.styleObj = styleObj;
+        this.emit('node:style-changed', { uid, styleObj, node });
+    }
+
+    /**
+     * Read the persisted style object for a node.
+     * Returns null if the node doesn't exist or has no committed styles.
+     *
+     * @param {string} uid
+     * @returns {object|null}
+     */
+    getNodeStyle(uid) {
+        return this.#nodes.get(uid)?.styleObj ?? null;
+    }
+
     // ─── Layout ───────────────────────────────────────────────────────────────
 
     /**
@@ -495,7 +524,7 @@ export class GraphStore extends EventBus {
                     node.title   = update.title   || node.title  || '';
                     node.message = update.rawMsg   || update.message || node.message || '';
                 } else if (field === 'style') {
-                    if (update.styleObj)   node.styleObj   = update.styleObj;
+                    if (update.styleObj)   this.setNodeStyle(node.uid, update.styleObj);
                     if (update.styleClass) node.styleClass = update.styleClass;
                 } else if (field === 'tags') {
                     node.tags = update.tags ?? node.tags;
