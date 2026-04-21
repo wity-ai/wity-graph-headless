@@ -40,8 +40,9 @@ function randomUid() {
 
 export class GraphStore extends EventBus {
     // Private Maps — O(1) access by uid
-    #nodes = new Map();   // uid → node
-    #edges = new Map();   // uid → edge
+    #nodes     = new Map();   // uid → node
+    #edges     = new Map();   // uid → edge
+    #adjacency = new Map();   // nodeUid → Set<edgeUid> — keeps refreshEdgePathsOfNode O(degree)
 
     // Viewport dimensions needed for root-node centering in layout
     #viewport = { width: 800, height: 600 };
@@ -243,16 +244,30 @@ export class GraphStore extends EventBus {
         this.emit('node:removed', { uid, descendants });
 
         this.#nodes.delete(uid);
-        for (const [eid, edge] of this.#edges) {
-            if (edge.srcUid === uid || edge.targetUid === uid) {
-                this.#edges.delete(eid);
+
+        // Remove connected edges via adjacency index — O(degree) not O(|E|)
+        const connectedEdgeUids = this.#adjacency.get(uid);
+        if (connectedEdgeUids) {
+            for (const eid of connectedEdgeUids) {
+                const edge = this.#edges.get(eid);
+                if (edge) {
+                    const otherUid = edge.srcUid === uid ? edge.targetUid : edge.srcUid;
+                    this.#adjacency.get(otherUid)?.delete(eid);
+                    this.#edges.delete(eid);
+                }
             }
+            this.#adjacency.delete(uid);
         }
 
         this.#scheduleEvent('nodes:changed');
         this.#scheduleEvent('edges:changed');
     }
 
+    /**
+     * Returns a direct reference to the internal node object — NOT a copy.
+     * Read-only use is safe. Any mutation MUST go through updateNode() to
+     * trigger events; direct property assignment silently bypasses listeners.
+     */
     getNode(uid)    { return this.#nodes.get(uid) ?? null; }
     getNodes()      { return [...this.#nodes.values()]; }
     hasNode(uid)    { return this.#nodes.has(uid); }
@@ -302,12 +317,18 @@ export class GraphStore extends EventBus {
         };
 
         this.#edges.set(edge.uid, edge);
+        this.#adjacencyAdd(edge.srcUid,    edge.uid);
+        this.#adjacencyAdd(edge.targetUid, edge.uid);
         this.#scheduleEvent('edges:changed');
         return edge;
     }
 
     removeEdge(uid) {
-        if (!this.#edges.delete(uid)) return;
+        const edge = this.#edges.get(uid);
+        if (!edge) return;
+        this.#adjacencyRemove(edge.srcUid,    uid);
+        this.#adjacencyRemove(edge.targetUid, uid);
+        this.#edges.delete(uid);
         this.#scheduleEvent('edges:changed');
     }
 
@@ -331,12 +352,13 @@ export class GraphStore extends EventBus {
     /**
      * Recompute paths for all edges connected to a given node.
      * Called after a node is dragged or its position is otherwise updated.
+     * O(degree) via adjacency index — safe to call at 60 fps during drag.
      */
     refreshEdgePathsOfNode(nodeUid) {
-        for (const edge of this.#edges.values()) {
-            if (edge.srcUid === nodeUid || edge.targetUid === nodeUid) {
-                this.refreshEdgePath(edge.uid);
-            }
+        const edgeUids = this.#adjacency.get(nodeUid);
+        if (!edgeUids?.size) return;
+        for (const edgeUid of edgeUids) {
+            this.refreshEdgePath(edgeUid);
         }
         this.#scheduleEvent('edges:changed');
     }
@@ -491,6 +513,7 @@ export class GraphStore extends EventBus {
     destroy() {
         this.#nodes.clear();
         this.#edges.clear();
+        this.#adjacency.clear();
         this.#pendingEvents.clear();
         this.#batchDepth  = 0;
         this.#renderCount = 0;
@@ -521,6 +544,10 @@ export class GraphStore extends EventBus {
      * Execute fn() without emitting events until the block completes.
      * Nested batch() calls are supported — events flush only when the
      * outermost block finishes.
+     *
+     * IMPORTANT: fn() must be synchronous. Async functions are not supported —
+     * #flushEvents() fires before any awaited work completes, so async mutations
+     * inside the batch will emit after the flush, bypassing the dedup mechanism.
      */
     batch(fn) {
         this.#batchDepth++;
@@ -533,6 +560,16 @@ export class GraphStore extends EventBus {
     }
 
     // ─── Private ──────────────────────────────────────────────────────────────
+
+    #adjacencyAdd(nodeUid, edgeUid) {
+        let set = this.#adjacency.get(nodeUid);
+        if (!set) { set = new Set(); this.#adjacency.set(nodeUid, set); }
+        set.add(edgeUid);
+    }
+
+    #adjacencyRemove(nodeUid, edgeUid) {
+        this.#adjacency.get(nodeUid)?.delete(edgeUid);
+    }
 
     #scheduleEvent(event) {
         this.#pendingEvents.set(event, true);

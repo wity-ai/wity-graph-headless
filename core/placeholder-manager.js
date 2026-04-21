@@ -29,13 +29,21 @@ export class PlaceholderManager extends EventBus {
     /** @type {{ fromUid: string, placeholderUid: string, snapUid: string|null } | null} */
     #state = null;
     #store;
+    #snapXThreshold;
+    #snapYThreshold;
 
     /**
      * @param {import('./graph-store.js').GraphStore} store
+     * @param {object} [options]
+     * @param {number} [options.snapThreshold=300]   Uniform snap radius (px). Overridden by snapXThreshold/snapYThreshold.
+     * @param {number} [options.snapXThreshold=300]  Horizontal snap radius (px).
+     * @param {number} [options.snapYThreshold=300]  Vertical snap radius (px).
      */
-    constructor(store) {
+    constructor(store, options = {}) {
         super();
-        this.#store = store;
+        this.#store          = store;
+        this.#snapXThreshold = options.snapXThreshold ?? options.snapThreshold ?? SNAP_X_THRESHOLD;
+        this.#snapYThreshold = options.snapYThreshold ?? options.snapThreshold ?? SNAP_Y_THRESHOLD;
     }
 
     // ─── State machine ────────────────────────────────────────────────────────
@@ -84,7 +92,7 @@ export class PlaceholderManager extends EventBus {
      * @param {number} [xThreshold]
      * @param {number} [yThreshold]
      */
-    update(x, y, xThreshold = SNAP_X_THRESHOLD, yThreshold = SNAP_Y_THRESHOLD) {
+    update(x, y, xThreshold = this.#snapXThreshold, yThreshold = this.#snapYThreshold) {
         if (!this.#state) return;
         const { fromUid, placeholderUid } = this.#state;
 
