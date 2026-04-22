@@ -81,6 +81,7 @@ export {
     DEFAULT_NODE_TYPE,
     getNodeTypeConfig,
     registerNodeType,
+    patchNodeType,
 } from './ontology/node-types.js';
 
 export {

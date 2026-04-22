@@ -121,3 +121,40 @@ export function registerNodeType(name, config) {
     }
     NODE_TYPES[name] = config;
 }
+
+/**
+ * Partially update a built-in or registered node type.
+ * Deep-merges one level per structural key — only the fields you provide change;
+ * everything else (ports, spacing, style classes, etc.) stays untouched.
+ *
+ * Call at app initialisation, BEFORE any nodes of that type are added to the
+ * store. Layout spacing and hit-testing use node.w / node.h which are stamped
+ * at addNode() time — patching after nodes exist leaves those cached values
+ * stale until the next computeLayout() + node recreation.
+ *
+ * @example
+ * patchNodeType('occurant', {
+ *   layout: { height: 100 },
+ *   style:  { heightCss: '6.25em' },
+ * });
+ *
+ * @param {string} name   Existing type name ('continuant', 'occurant', or custom)
+ * @param {object} patch  Partial config — only the keys you want to change
+ */
+export function patchNodeType(name, patch) {
+    const existing = NODE_TYPES[name];
+    if (!existing) {
+        console.warn(`[NodeTypes] patchNodeType: unknown type "${name}". Use registerNodeType to define new types.`);
+        return;
+    }
+    NODE_TYPES[name] = {
+        ...existing,
+        ...patch,
+        layout: { ...existing.layout, ...(patch.layout ?? {}) },
+        ports: {
+            inputs:  patch.ports?.inputs  ?? existing.ports.inputs,
+            outputs: patch.ports?.outputs ?? existing.ports.outputs,
+        },
+        style: { ...existing.style, ...(patch.style ?? {}) },
+    };
+}
