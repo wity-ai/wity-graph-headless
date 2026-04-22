@@ -27,13 +27,26 @@ export class SelectionManager extends EventBus {
         super();
         this.#store = store;
 
-        // Auto-deselect nodes that are removed from the graph
+        // Auto-deselect on single-node removal
         store.on('node:removed', ({ uid }) => {
             if (this.#selected.has(uid)) {
                 this.#lastDeselected = this.#selected.get(uid);
                 this.#selected.delete(uid);
                 this.#emit();
             }
+        });
+
+        // Auto-deselect on bulk removal — one selection:changed emission for the whole batch
+        store.on('nodes:removed', ({ uids }) => {
+            let anyChanged = false;
+            for (const uid of uids) {
+                if (this.#selected.has(uid)) {
+                    this.#lastDeselected = this.#selected.get(uid);
+                    this.#selected.delete(uid);
+                    anyChanged = true;
+                }
+            }
+            if (anyChanged) this.#emit();
         });
     }
 

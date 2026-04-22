@@ -13,6 +13,8 @@
  *   'node:moved'          { uid, x, y, node }          — after moveNode()
  *   'node:status-changed' { uid, status, node }        — after setNodeStatus()
  *   'node:style-changed'  { uid, styleObj, node }      — after setNodeStyle()
+ *   'node:removed'        { uid, descendants: node[] } — before single-node removal
+ *   'nodes:removed'       { uids, nodes: node[] }      — before bulk removal (removeNodes)
  */
 
 import { EventBus }  from './event-bus.js';
@@ -242,27 +244,45 @@ export class GraphStore extends EventBus {
      */
     removeNode(uid) {
         if (!this.#nodes.has(uid)) return;
-        const descendants = getDescendants(uid, this.#nodes);   // node[]
+        const descendants = getDescendants(uid, this.#nodes);
         this.emit('node:removed', { uid, descendants });
-
-        this.#nodes.delete(uid);
-
-        // Remove connected edges via adjacency index — O(degree) not O(|E|)
-        const connectedEdgeUids = this.#adjacency.get(uid);
-        if (connectedEdgeUids) {
-            for (const eid of connectedEdgeUids) {
-                const edge = this.#edges.get(eid);
-                if (edge) {
-                    const otherUid = edge.srcUid === uid ? edge.targetUid : edge.srcUid;
-                    this.#adjacency.get(otherUid)?.delete(eid);
-                    this.#edges.delete(eid);
-                }
-            }
-            this.#adjacency.delete(uid);
-        }
-
+        this.#deleteNode(uid);
         this.#scheduleEvent('nodes:changed');
         this.#scheduleEvent('edges:changed');
+    }
+
+    /**
+     * Remove multiple nodes and all their connected edges in a single batch.
+     * Prefer this over calling removeNode() in a loop — emits one 'nodes:removed'
+     * event before deletion and coalesces 'nodes:changed' + 'edges:changed' into
+     * single emissions regardless of how many nodes are removed.
+     *
+     * The caller is responsible for passing the full set of uids to remove
+     * (including descendants if desired — use store.getDescendants() to build the list).
+     *
+     * @param {string[]} uids
+     * @example
+     * // Delete a branch
+     * const descendants = store.getDescendants(uid);
+     * store.removeNodes([uid, ...descendants.map(d => d.uid)]);
+     */
+    removeNodes(uids) {
+        const toRemove = uids.filter(uid => this.#nodes.has(uid));
+        if (!toRemove.length) return;
+
+        const nodes = toRemove.map(uid => this.#nodes.get(uid));
+
+        // Emit once before any deletion — presentation layer animates all exits together
+        this.emit('nodes:removed', { uids: toRemove, nodes });
+
+        this.batch(() => {
+            for (const uid of toRemove) {
+                if (!this.#nodes.has(uid)) continue;
+                this.#deleteNode(uid);
+                this.#scheduleEvent('nodes:changed');
+                this.#scheduleEvent('edges:changed');
+            }
+        });
     }
 
     /**
@@ -589,6 +609,24 @@ export class GraphStore extends EventBus {
     }
 
     // ─── Private ──────────────────────────────────────────────────────────────
+
+    // Delete a node and its connected edges, maintaining the adjacency index.
+    // Pure data removal — no event emission. Called by removeNode and removeNodes.
+    #deleteNode(uid) {
+        this.#nodes.delete(uid);
+        const connectedEdgeUids = this.#adjacency.get(uid);
+        if (connectedEdgeUids) {
+            for (const eid of connectedEdgeUids) {
+                const edge = this.#edges.get(eid);
+                if (edge) {
+                    const otherUid = edge.srcUid === uid ? edge.targetUid : edge.srcUid;
+                    this.#adjacency.get(otherUid)?.delete(eid);
+                    this.#edges.delete(eid);
+                }
+            }
+            this.#adjacency.delete(uid);
+        }
+    }
 
     #adjacencyAdd(nodeUid, edgeUid) {
         let set = this.#adjacency.get(nodeUid);
