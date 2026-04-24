@@ -64,7 +64,7 @@ export { rectsOverlap, getOverlappingNodes, resolveOverlaps, getNodesAroundPoint
 export { horizontalLinkPath, computeNodeLinkPath }                           from './geometry/link-path.js';
 export { getPortSvgPos, getPortDots, getActiveInputPorts,
          getDefaultOutputPortId, getDefaultInputPortId }                     from './geometry/port-geometry.js';
-export { getPanTargetForNode }                                               from './geometry/pan-target.js';
+export { getPanTargetForNode, getFitToContent }                              from './geometry/pan-target.js';
 
 // Spatial point/rect queries — pure bounding-box math, no layout or traversal.
 export { getNodeAtPoint, getNodesInRect }                                    from './core/geometry.js';

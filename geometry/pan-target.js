@@ -33,3 +33,50 @@ export function getPanTargetForNode(node, layout, viewport, { zoom = 1, xOffset 
         y: viewport.height / 2 - layout.height / 2 - yOffset - node.y * zoom,
     };
 }
+
+/**
+ * Compute the pan and zoom values that fit all placed nodes into the viewport.
+ *
+ * Pure math — no side effects. Pass the result directly to animateTo() for a
+ * smooth transition, or apply immediately via setPan() + zoomToCenter().
+ *
+ * @param {object[]} nodes      All nodes from store.getNodes() — unplaced nodes (x == null) are skipped
+ * @param {object}   viewport   Viewport dimensions { width, height } in screen px
+ * @param {object}   [options]
+ * @param {number}   [options.padding=0.9]   Fraction of viewport to fill (0.9 = 10% margin on each side)
+ * @param {number}   [options.minZoom=0.1]   Floor on the computed zoom
+ * @param {number}   [options.maxZoom=1]     Ceiling on the computed zoom — default 1 prevents magnifying
+ *                                           a small graph beyond actual size
+ * @returns {{ pan: { x, y }, zoom } | null}  null if no placed nodes
+ */
+export function getFitToContent(nodes, viewport, { padding = 0.9, minZoom = 0.1, maxZoom = 1 } = {}) {
+    const placed = nodes.filter(n => n.x != null && n.y != null);
+    if (!placed.length) return null;
+
+    // Bounding box across all placed nodes — uses per-node w/h (set at addNode time)
+    let bMinX = Infinity, bMinY = Infinity, bMaxX = -Infinity, bMaxY = -Infinity;
+    for (const n of placed) {
+        bMinX = Math.min(bMinX, n.x);
+        bMinY = Math.min(bMinY, n.y);
+        bMaxX = Math.max(bMaxX, n.x + n.w);
+        bMaxY = Math.max(bMaxY, n.y + n.h);
+    }
+
+    const contentW = bMaxX - bMinX;
+    const contentH = bMaxY - bMinY;
+
+    // Zoom to fit, clamped to [minZoom, maxZoom]
+    const rawZoom = Math.min(
+        (viewport.width  * padding) / contentW,
+        (viewport.height * padding) / contentH,
+    );
+    const zoom = Math.min(Math.max(rawZoom, minZoom), maxZoom);
+
+    // Pan to centre the bounding box midpoint in the viewport
+    const pan = {
+        x: viewport.width  / 2 - (bMinX + contentW / 2) * zoom,
+        y: viewport.height / 2 - (bMinY + contentH / 2) * zoom,
+    };
+
+    return { pan, zoom };
+}
