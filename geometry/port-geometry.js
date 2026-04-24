@@ -28,7 +28,10 @@ export function getPortSvgPos(node, portId, getConfig) {
 
     const nx = node.movedX ?? node.x ?? 0;
     const ny = node.movedY ?? node.y ?? 0;
-    const { width, height } = cfg.layout;
+    // Per-node w/h override type config — lets callers pass custom dimensions on
+    // the node data (e.g. media nodes) without registering a separate node type.
+    const width  = node.w ?? cfg.layout.width;
+    const height = node.h ?? cfg.layout.height;
 
     const x = port.side === 'output'
         ? nx + width  - (port.xOffset ?? 0)

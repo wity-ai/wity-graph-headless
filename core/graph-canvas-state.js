@@ -106,8 +106,8 @@ export class GraphCanvasState {
         return {
             x:      node.x * zoom + pan.x,
             y:      node.y * zoom + pan.y,
-            width:  cfg.width  * zoom,
-            height: cfg.height * zoom,
+            width:  (node.w ?? cfg.width)  * zoom,
+            height: (node.h ?? cfg.height) * zoom,
         };
     }
 
