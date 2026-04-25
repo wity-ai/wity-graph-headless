@@ -13,6 +13,7 @@
  *   'node:moved'          { uid, x, y, node }          — after moveNode()
  *   'node:status-changed' { uid, status, node }        — after setNodeStatus()
  *   'node:style-changed'  { uid, styleObj, node }      — after setNodeStyle()
+ *   'node:data-changed'   { uid, data, node }          — after setNodeData() (shallow merge)
  *   'node:removed'        { uid, descendants: node[] } — before single-node removal
  *   'nodes:removed'       { uids, nodes: node[] }      — before bulk removal (removeNodes)
  */
@@ -452,6 +453,36 @@ export class GraphStore extends EventBus {
      */
     getNodeStyle(uid) {
         return this.#nodes.get(uid)?.styleObj ?? null;
+    }
+
+    /**
+     * Shallow-merge arbitrary opaque data onto a node and emit 'node:data-changed'.
+     *
+     * Use this instead of updateNode() when you want presentation layers to react
+     * to external data enrichment (e.g. attaching media, composed forms, AI results)
+     * without subscribing to the broad 'nodes:changed' event.
+     *
+     * Object.assign semantics — top-level keys are merged, nested objects are replaced.
+     *
+     * @param {string} uid
+     * @param {object} data  Opaque payload — the UI layer defines the shape.
+     */
+    setNodeData(uid, data) {
+        const node = this.#nodes.get(uid);
+        if (!node) return;
+        Object.assign(node, data);
+        this.emit('node:data-changed', { uid, data, node });
+    }
+
+    /**
+     * Read opaque data previously merged onto a node via setNodeData().
+     * Returns the full node object (mutable reference — do not mutate).
+     *
+     * @param {string} uid
+     * @returns {object|null}
+     */
+    getNodeData(uid) {
+        return this.#nodes.get(uid) ?? null;
     }
 
     // ─── Layout ───────────────────────────────────────────────────────────────
