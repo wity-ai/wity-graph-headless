@@ -16,6 +16,8 @@
  *   'node:data-changed'   { uid, data, node }          — after setNodeData() (shallow merge)
  *   'node:removed'        { uid, descendants: node[] } — before single-node removal
  *   'nodes:removed'       { uids, nodes: node[] }      — before bulk removal (removeNodes)
+ *   'objects:changed'     { objects: object[] }        — after addObject() / removeObject()
+ *   'object:moved'        { uid, x, y, offset, object } — after moveObject() or when anchor node moves
  */
 
 import { EventBus }  from './event-bus.js';
@@ -47,6 +49,8 @@ export class GraphStore extends EventBus {
     #nodes     = new Map();   // uid → node
     #edges     = new Map();   // uid → edge
     #adjacency = new Map();   // nodeUid → Set<edgeUid> — keeps refreshEdgePathsOfNode O(degree)
+    #objects        = new Map();   // uid → object
+    #objectsByAnchor = new Map();  // nodeUid → Set<objectUid> — O(1) lookup on node move
 
     // Viewport dimensions needed for root-node centering in layout
     #viewport = { width: 800, height: 600 };
@@ -410,6 +414,22 @@ export class GraphStore extends EventBus {
         this.refreshEdgePathsOfNode(uid);
 
         this.emit('node:moved', { uid, x, y, node });
+
+        // Reactively reposition any objects anchored to this node
+        const anchoredUids = this.#objectsByAnchor.get(uid);
+        if (anchoredUids) {
+            for (const oUid of anchoredUids) {
+                const obj = this.#objects.get(oUid);
+                if (obj) this.emit('object:moved', {
+                    uid:    oUid,
+                    x:      x + obj.offset.x,
+                    y:      y + obj.offset.y,
+                    offset: obj.offset,
+                    object: obj,
+                });
+            }
+        }
+
         return node;
     }
 
@@ -483,6 +503,84 @@ export class GraphStore extends EventBus {
      */
     getNodeData(uid) {
         return this.#nodes.get(uid) ?? null;
+    }
+
+    // ─── Objects ──────────────────────────────────────────────────────────────
+
+    /**
+     * Add a decorator object anchored to a node.
+     *
+     * An object is a positioned, opaque-data entity that tracks its anchor node.
+     * Its absolute SVG position is always: anchor.x + offset.x, anchor.y + offset.y.
+     * When the anchor node moves, 'object:moved' fires automatically.
+     *
+     * @param {string} uid        Unique identifier
+     * @param {object} config
+     * @param {string} config.anchoredTo   UID of the anchor node (required)
+     * @param {{ x, y }} [config.offset]  Offset from anchor origin. Default: { x: 0, y: 0 }
+     * @param {boolean}  [config.movable]  Whether the object can be dragged. Default: false
+     * @param {string}   [config.type]     Opaque type string — presentation layer interprets
+     */
+    addObject(uid, config) {
+        const { anchoredTo, offset = { x: 0, y: 0 }, movable = false, ...rest } = config;
+        if (!this.#nodes.has(anchoredTo)) {
+            console.warn(`[GraphStore] addObject: anchor node "${anchoredTo}" not found`);
+            return null;
+        }
+        const object = { uid, anchoredTo, offset: { ...offset }, movable, ...rest };
+        this.#objects.set(uid, object);
+
+        if (!this.#objectsByAnchor.has(anchoredTo)) this.#objectsByAnchor.set(anchoredTo, new Set());
+        this.#objectsByAnchor.get(anchoredTo).add(uid);
+
+        this.emit('objects:changed', { objects: this.getObjects() });
+        return object;
+    }
+
+    /**
+     * Remove a decorator object by uid.
+     */
+    removeObject(uid) {
+        const object = this.#objects.get(uid);
+        if (!object) return;
+        this.#objectsByAnchor.get(object.anchoredTo)?.delete(uid);
+        this.#objects.delete(uid);
+        this.emit('objects:changed', { objects: this.getObjects() });
+    }
+
+    /**
+     * Move a movable object by updating its offset from its anchor node.
+     * Emits 'object:moved' with the new absolute SVG position.
+     *
+     * @param {string} uid
+     * @param {number} offsetX
+     * @param {number} offsetY
+     */
+    moveObject(uid, offsetX, offsetY) {
+        const object = this.#objects.get(uid);
+        if (!object) return;
+        object.offset = { x: offsetX, y: offsetY };
+        const anchor = this.#nodes.get(object.anchoredTo);
+        const x = (anchor?.x ?? 0) + offsetX;
+        const y = (anchor?.y ?? 0) + offsetY;
+        this.emit('object:moved', { uid, x, y, offset: object.offset, object });
+    }
+
+    /** @returns {object|null} */
+    getObject(uid) { return this.#objects.get(uid) ?? null; }
+
+    /** @returns {object[]} */
+    getObjects() { return [...this.#objects.values()]; }
+
+    /**
+     * Return all objects anchored to a given node.
+     * @param {string} nodeUid
+     * @returns {object[]}
+     */
+    getObjectsForNode(nodeUid) {
+        const uids = this.#objectsByAnchor.get(nodeUid);
+        if (!uids) return [];
+        return [...uids].map(uid => this.#objects.get(uid)).filter(Boolean);
     }
 
     // ─── Layout ───────────────────────────────────────────────────────────────
@@ -642,6 +740,7 @@ export class GraphStore extends EventBus {
     // ─── Private ──────────────────────────────────────────────────────────────
 
     // Delete a node and its connected edges, maintaining the adjacency index.
+    // Also removes any objects anchored to this node.
     // Pure data removal — no event emission. Called by removeNode and removeNodes.
     #deleteNode(uid) {
         this.#nodes.delete(uid);
@@ -656,6 +755,12 @@ export class GraphStore extends EventBus {
                 }
             }
             this.#adjacency.delete(uid);
+        }
+        // Remove orphaned objects anchored to this node
+        const anchoredObjectUids = this.#objectsByAnchor.get(uid);
+        if (anchoredObjectUids) {
+            for (const oUid of anchoredObjectUids) this.#objects.delete(oUid);
+            this.#objectsByAnchor.delete(uid);
         }
     }
 
