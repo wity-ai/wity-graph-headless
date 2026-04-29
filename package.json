@@ -1,6 +1,6 @@
 {
   "name": "@wity/graph-headless",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Headless, ontologically-grounded directed graph library. Pure state, layout, traversal, and geometry — zero DOM dependencies.",
   "type": "module",
   "main": "./index.js",

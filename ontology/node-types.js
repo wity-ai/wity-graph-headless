@@ -119,7 +119,14 @@ export function registerNodeType(name, config) {
     if (NODE_TYPES[name]) {
         console.warn(`[NodeTypes] Overwriting existing node type: "${name}"`);
     }
-    NODE_TYPES[name] = config;
+    NODE_TYPES[name] = {
+        ...config,
+        style: {
+            nodeClass:      '',
+            containerClass: '',
+            ...config.style,
+        },
+    };
 }
 
 /**
