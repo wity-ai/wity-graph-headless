@@ -22,6 +22,16 @@ export class PanZoomState {
     #minZoom = 0.05;
     #maxZoom = 10;
 
+    /**
+     * @param {object} [opts]
+     * @param {number} [opts.minZoom=0.05]
+     * @param {number} [opts.maxZoom=10]
+     */
+    constructor({ minZoom, maxZoom } = {}) {
+        if (minZoom != null) this.#minZoom = minZoom;
+        if (maxZoom != null) this.#maxZoom = maxZoom;
+    }
+
     // ─── State accessors ──────────────────────────────────────────────────────
 
     get pan()  { return { ...this.#pan }; }

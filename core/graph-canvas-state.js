@@ -25,13 +25,17 @@ export class GraphCanvasState {
     #viewport;
 
     /**
-     * @param {GraphStore}   store    The graph data store
-     * @param {object}       viewport Initial viewport dimensions { width, height }
+     * @param {GraphStore} store
+     * @param {object}     [opts]
+     * @param {number}     [opts.width=800]
+     * @param {number}     [opts.height=600]
+     * @param {number}     [opts.minZoom=0.05]
+     * @param {number}     [opts.maxZoom=10]
      */
-    constructor(store, viewport = { width: 800, height: 600 }) {
-        this.#store   = store;
-        this.#panZoom = new PanZoomState();
-        this.#viewport = { ...viewport };
+    constructor(store, { width = 800, height = 600, minZoom, maxZoom } = {}) {
+        this.#store    = store;
+        this.#panZoom  = new PanZoomState({ minZoom, maxZoom });
+        this.#viewport = { width, height };
     }
 
     // ─── Viewport ─────────────────────────────────────────────────────────────
