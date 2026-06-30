@@ -34,6 +34,7 @@
 
 // ─── Core ─────────────────────────────────────────────────────────────────────
 
+export { GraphAbstract }       from './core/graph-abstract.js';
 export { GraphStore }          from './core/graph-store.js';
 export { EventBus }            from './core/event-bus.js';
 export { SelectionManager }    from './core/selection-manager.js';
