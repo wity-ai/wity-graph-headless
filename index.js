@@ -16,9 +16,13 @@
  *   ├──────────────────────────┬───────────────────────────────┤
  *   │  GraphStore              │  PanZoomState                 │
  *   │  (node/edge data+layout) │  (pan, zoom, coord math)      │
- *   ├──────────┬───────────────┴──────────────┬────────────────┤
- *   │  Layout  │  Traversal                   │  Geometry      │
- *   ├──────────┴──────────────────────────────┴────────────────┤
+ *   ├──────────────────────────┴───────────────────────────────┤
+ *   │  GraphAbstract                                           │
+ *   │  pure combinatorial graph — vertices + typed edges only  │
+ *   │  no coordinates, no geometry, no embedding               │
+ *   ├──────────┬───────────────────────────┬───────────────────┤
+ *   │  Layout  │  Traversal                │  Geometry         │
+ *   ├──────────┴───────────────────────────┴───────────────────┤
  *   │  Ontology  (node-types, link-types — BFO grounded)       │
  *   ├──────────────────────────────────────────────────────────┤
  *   │  Actors & Session                                        │
