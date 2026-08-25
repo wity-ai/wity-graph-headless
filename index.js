@@ -67,6 +67,7 @@ export { rectsOverlap, getOverlappingNodes, resolveOverlaps, getNodesAroundPoint
 // ─── Geometry ─────────────────────────────────────────────────────────────────
 
 export { horizontalLinkPath, computeNodeLinkPath }                           from './geometry/link-path.js';
+export { polylinePath, smoothPolylinePath, computePolylinePath }             from './geometry/polyline-path.js';
 export { getPortSvgPos, getPortDots, getActiveInputPorts,
          getDefaultOutputPortId, getDefaultInputPortId }                     from './geometry/port-geometry.js';
 export { getPanTargetForNode, getFitToContent }                              from './geometry/pan-target.js';
@@ -85,6 +86,7 @@ export {
     NODE_TYPES,
     DEFAULT_NODE_TYPE,
     getNodeTypeConfig,
+    getDataSchema,
     registerNodeType,
     patchNodeType,
 } from './ontology/node-types.js';

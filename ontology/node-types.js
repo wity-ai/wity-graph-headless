@@ -101,6 +101,15 @@ export function getNodeTypeConfig(type) {
 }
 
 /**
+ * Returns the dataSchema for a node type, or null if none is defined.
+ * @param {string} type
+ * @returns {object|null}
+ */
+export function getDataSchema(type) {
+    return NODE_TYPES[type]?.dataSchema ?? null;
+}
+
+/**
  * Register a custom node type at runtime.
  * Enables extending the ontology without modifying this file.
  *
@@ -112,7 +121,11 @@ export function getNodeTypeConfig(type) {
  *     inputs:  [{ id: 'in',  side: 'input',  yFraction: 0.5, xOffset: 0 }],
  *     outputs: [{ id: 'out', side: 'output', yFraction: 0.5, xOffset: 0 }],
  *   },
- *   style: { nodeClass: 'goal-node', widthCss: '15em', heightCss: '17em' }
+ *   style: { nodeClass: 'goal-node', widthCss: '15em', heightCss: '17em' },
+ *   dataSchema: {                     // optional — typed properties for node.data
+ *     priority: { type: 'number' },
+ *     status:   { type: 'enum', values: ['draft', 'active', 'met'] },
+ *   },
  * })
  */
 export function registerNodeType(name, config) {
@@ -126,6 +139,7 @@ export function registerNodeType(name, config) {
             containerClass: '',
             ...config.style,
         },
+        dataSchema: config.dataSchema ?? undefined,
     };
 }
 
@@ -163,5 +177,6 @@ export function patchNodeType(name, patch) {
             outputs: patch.ports?.outputs ?? existing.ports.outputs,
         },
         style: { ...existing.style, ...(patch.style ?? {}) },
+        dataSchema: patch.dataSchema !== undefined ? patch.dataSchema : existing.dataSchema,
     };
 }
