@@ -5,7 +5,7 @@
  *
  * The XML format is:
  *
- *   <wity-graph version="1">
+ *   <wity-knowledge version="1">
  *     <nodes>
  *       <node uid="n1" type="continuant" label="...">
  *         <data key="pressure" type="number">320</data>
@@ -17,7 +17,7 @@
  *         <data key="weight">0.8</data>
  *       </edge>
  *     </edges>
- *   </wity-graph>
+ *   </wity-knowledge>
  *
  * @module serializer/serialize
  */
@@ -118,7 +118,7 @@ export function serialize(source) {
     const edges = snapshot.edges ?? [];
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-    xml += `<wity-graph version="1">\n`;
+    xml += `<wity-knowledge version="1">\n`;
 
     // ── Nodes ──────────────────────────────────────────────────────────────
     xml += `${indent(1)}<nodes>\n`;
@@ -148,6 +148,6 @@ export function serialize(source) {
     }
     xml += `${indent(1)}</edges>\n`;
 
-    xml += `</wity-graph>\n`;
+    xml += `</wity-knowledge>\n`;
     return xml;
 }

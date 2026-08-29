@@ -1,6 +1,6 @@
 /**
  * @file serializer/parse.js
- * Parse a wity-graph XML string into a plain snapshot: { version, nodes, edges }.
+ * Parse a wity-knowledge XML string into a plain snapshot: { version, nodes, edges }.
  *
  * Isomorphic: uses DOMParser in browser environments.
  * Node.js consumers call setXmlParser() once at startup with an @xmldom/xmldom
@@ -32,7 +32,7 @@ function getParser() {
     if (_injectedParser)                  return _injectedParser;
     if (typeof DOMParser !== 'undefined') return new DOMParser();
     throw new Error(
-        '[wity-graph] No XML parser available. In Node.js, call setXmlParser() before parse().\n' +
+        '[wity-knowledge] No XML parser available. In Node.js, call setXmlParser() before parse().\n' +
         'Example: import { DOMParser } from "@xmldom/xmldom"; setXmlParser(new DOMParser());'
     );
 }
@@ -83,7 +83,7 @@ function parseDataElements(parentEl) {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Parse a wity-graph XML string into a snapshot.
+ * Parse a wity-knowledge XML string into a snapshot.
  *
  * @param {string} xml — XML string produced by serialize()
  * @returns {{ version: number, nodes: object[], edges: object[] }}
@@ -104,8 +104,8 @@ export function parse(xml) {
     const doc    = parser.parseFromString(xml, 'application/xml');
 
     const root = doc.documentElement;
-    if (!root || root.tagName !== 'wity-graph') {
-        throw new Error('[wity-graph] parse: root element must be <wity-graph>');
+    if (!root || root.tagName !== 'wity-knowledge') {
+        throw new Error('[wity-knowledge] parse: root element must be <wity-knowledge>');
     }
 
     const version = Number(root.getAttribute('version') || 1);
