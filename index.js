@@ -25,6 +25,8 @@
  *   ├──────────┴───────────────────────────┴───────────────────┤
  *   │  Ontology  (node-types, link-types — BFO grounded)       │
  *   ├──────────────────────────────────────────────────────────┤
+ *   │  Serialization  (serialize → XML, parse → snapshot)      │
+ *   ├──────────────────────────────────────────────────────────┤
  *   │  Actors & Session                                        │
  *   │  ActorRegistry · SessionLog · PresenceState              │
  *   │  Independent of graph structure; layered on top.         │
@@ -116,6 +118,11 @@ export {
 export { ActorRegistry }  from './core/actor-registry.js';
 export { SessionLog }     from './core/session-log.js';
 export { PresenceState }  from './core/presence-state.js';
+
+// ─── Serialization ────────────────────────────────────────────────────────────
+
+export { serialize }              from './serializer/serialize.js';
+export { parse, setXmlParser }    from './serializer/parse.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
