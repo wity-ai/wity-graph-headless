@@ -100,8 +100,7 @@ function serializeData(data, depth) {
  * @returns {string} Canonical XML string
  *
  * @example
- * import { GraphAbstract } from '@wity/graph-headless';
- * import { serialize } from '@wity/graph-headless';
+ * import { GraphAbstract, serialize } from '@wity/graph-headless';
  *
  * const graph = new GraphAbstract();
  * graph.addNode({ uid: 'a', type: 'continuant', label: 'Idea' });
