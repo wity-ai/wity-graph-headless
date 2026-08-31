@@ -61,6 +61,15 @@ export {
     getDepth,
 } from './core/graph-traversal.js';
 
+// ─── Algorithms ──────────────────────────────────────────────────────────────
+
+export {
+    propagate,
+    reachable,
+    shortestPath,
+    allPaths,
+} from './core/graph-algorithms.js';
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 export { computeLayout, computeNodePosition } from './layout/horizontal-tree.js';
