@@ -32,9 +32,6 @@ import {
     getParents,
     getAncestors,
     getRoots,
-    getEdgesOfNode,
-    getOutgoingEdges,
-    getIncomingEdges,
     findCommonParent,
     getDepth,
 } from './graph-traversal.js';
@@ -706,9 +703,16 @@ export class GraphStore extends EventBus {
     getParents(uid)              { return getParents(uid, this.#nodes); }
     getAncestors(uid)            { return getAncestors(uid, this.#nodes); }
     getRoots()                   { return getRoots(this.#nodes); }
-    getEdgesOfNode(uid)          { return getEdgesOfNode(uid, this.#edges); }
-    getOutgoingEdges(uid)        { return getOutgoingEdges(uid, this.#edges); }
-    getIncomingEdges(uid)        { return getIncomingEdges(uid, this.#edges); }
+    // read through the per-node index the store already keeps (#adjacency), in the order the edges were added
+    getEdgesOfNode(uid)          { return this.#edgesAt(uid, () => true); }
+    getOutgoingEdges(uid)        { return this.#edgesAt(uid, (e) => e.srcUid === uid); }
+    getIncomingEdges(uid)        { return this.#edgesAt(uid, (e) => e.targetUid === uid); }
+
+    #edgesAt(uid, keep) {
+        const out = [];
+        for (const eid of this.#adjacency.get(uid) ?? []) { const e = this.#edges.get(eid); if (e && keep(e)) out.push(e); }
+        return out;
+    }
     findCommonParent(uidA, uidB) { return findCommonParent(uidA, uidB, this.#nodes); }
     getDepth(uid)                { return getDepth(uid, this.#nodes); }
 

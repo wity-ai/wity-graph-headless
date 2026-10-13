@@ -58,183 +58,6 @@ class EventBus {
 }
 
 /**
- * Graph traversal — pure graph algorithms over Map<uid, node> / Map<uid, edge>.
- * No DOM, no rendering, no layout concerns.
- * All functions are stateless and composable.
- *
- * Return type convention:
- *   All node-returning functions return node objects (not uid strings).
- *   Callers that only need UIDs can map: result.map(n => n.uid)
- */
-
-/**
- * Returns direct children of parentUid.
- * Children are nodes whose links array contains a link pointing to parentUid.
- * (Link direction: child.links[].targetUid === parent.uid)
- *
- * @param {string} parentUid
- * @param {Map}    nodes       Map<uid, node>
- * @returns {object[]} node[]
- */
-function getChildren(parentUid, nodes) {
-    return [...nodes.values()].filter(node =>
-        node.links?.some(link => link.targetUid === parentUid)
-    );
-}
-
-/**
- * Returns all descendants of rootUid (recursive, depth-first).
- * Returns node objects for consistency with getChildren / getParents.
- *
- * @param {string} rootUid
- * @param {Map}    nodes
- * @returns {object[]} node[]
- */
-function getDescendants(rootUid, nodes) {
-    const descendants = [];
-    const visited = new Set();
-
-    const visit = (uid) => {
-        getChildren(uid, nodes).forEach(child => {
-            if (visited.has(child.uid)) return;
-            visited.add(child.uid);
-            descendants.push(child);
-            visit(child.uid);
-        });
-    };
-
-    visit(rootUid);
-    return descendants;
-}
-
-/**
- * Returns direct parents of nodeUid.
- * Parents are the nodes that nodeUid links to (nodeUid.links[].targetUid).
- *
- * @param {string} nodeUid
- * @param {Map}    nodes
- * @returns {object[]} node[]
- */
-function getParents(nodeUid, nodes) {
-    const node = nodes.get(nodeUid);
-    if (!node?.links?.length) return [];
-    return node.links.map(link => nodes.get(link.targetUid)).filter(Boolean);
-}
-
-/**
- * Returns all ancestors of nodeUid (recursive, follows parent chain upward).
- * Returns node objects for consistency.
- *
- * @param {string} nodeUid
- * @param {Map}    nodes
- * @returns {object[]} node[]
- */
-function getAncestors(nodeUid, nodes) {
-    const ancestors = new Map();   // uid → node, preserves insertion order, no dupes
-
-    const visit = (uid) => {
-        getParents(uid, nodes).forEach(parent => {
-            if (!ancestors.has(parent.uid)) {
-                ancestors.set(parent.uid, parent);
-                visit(parent.uid);
-            }
-        });
-    };
-
-    visit(nodeUid);
-    return [...ancestors.values()];
-}
-
-/**
- * Returns root nodes — nodes with no outgoing links (no parents).
- *
- * @param {Map} nodes
- * @returns {object[]} node[]
- */
-function getRoots(nodes) {
-    return [...nodes.values()].filter(node => !node.links?.length);
-}
-
-/**
- * Returns all edges connected to a node (as source or target).
- *
- * @param {string} nodeUid
- * @param {Map}    edges    Map<uid, edge>
- * @returns {object[]} edge[]
- */
-function getEdgesOfNode(nodeUid, edges) {
-    return [...edges.values()].filter(
-        edge => edge.srcUid === nodeUid || edge.targetUid === nodeUid
-    );
-}
-
-/**
- * Returns edges where nodeUid is the source.
- *
- * @param {string} nodeUid
- * @param {Map}    edges
- * @returns {object[]} edge[]
- */
-function getOutgoingEdges(nodeUid, edges) {
-    return [...edges.values()].filter(edge => edge.srcUid === nodeUid);
-}
-
-/**
- * Returns edges where nodeUid is the target.
- *
- * @param {string} nodeUid
- * @param {Map}    edges
- * @returns {object[]} edge[]
- */
-function getIncomingEdges(nodeUid, edges) {
-    return [...edges.values()].filter(edge => edge.targetUid === nodeUid);
-}
-
-/**
- * Checks whether two nodes share at least one common parent.
- *
- * @param {string} uidA
- * @param {string} uidB
- * @param {Map}    nodes
- * @returns {object|false} The shared parent node, or false
- */
-function findCommonParent(uidA, uidB, nodes) {
-    const parentsA = new Set(getParents(uidA, nodes).map(n => n.uid));
-    for (const parent of getParents(uidB, nodes)) {
-        if (parentsA.has(parent.uid)) return parent;
-    }
-    return false;
-}
-
-/**
- * Returns the depth of a node from the nearest root (0 = root itself).
- *
- * @param {string} nodeUid
- * @param {Map}    nodes
- * @returns {number}
- */
-function getDepth(nodeUid, nodes) {
-    const visited = new Set();
-    let depth   = 0;
-    let current = [nodeUid];
-
-    while (current.length) {
-        const next = [];
-        for (const uid of current) {
-            if (visited.has(uid)) continue;
-            visited.add(uid);
-            const parents = getParents(uid, nodes);
-            if (!parents.length) return depth;
-            next.push(...parents.map(p => p.uid));
-        }
-        current = next;
-        depth++;
-    }
-
-    return depth;
-}
-
-/**
  * GraphAbstract — a pure combinatorial graph.
  *
  * Vertices (nodes) and edges only. No coordinates, no geometry, no embedding,
@@ -276,6 +99,37 @@ function getDepth(nodeUid, nodes) {
 class GraphAbstract extends EventBus {
     #nodes = new Map();   // uid → node
     #edges = new Map();   // uid → edge
+    // Per node, the uids of the edges that touch it, in the order the edges were added — so "the edges of this node"
+    // costs its own edges, not every edge of the graph. A stored edge's ends never change (an update keeps them),
+    // so the index only changes where edges are added or removed.
+    #incident = new Map();   // nodeUid → Set<edgeUid>
+
+    #touch(edge) {
+        for (const end of edge.srcUid === edge.targetUid ? [edge.srcUid] : [edge.srcUid, edge.targetUid]) {
+            let set = this.#incident.get(end);
+            if (!set) this.#incident.set(end, (set = new Set()));
+            set.add(edge.uid);
+        }
+    }
+
+    #untouch(edge) {
+        for (const end of [edge.srcUid, edge.targetUid]) {
+            const set = this.#incident.get(end);
+            if (!set) continue;
+            set.delete(edge.uid);
+            if (!set.size) this.#incident.delete(end);
+        }
+    }
+
+    /** The edges touching a node, in insertion order, kept to those that pass `keep`. */
+    #edgesAt(nodeUid, keep) {
+        const out = [];
+        for (const uid of this.#incident.get(nodeUid) ?? []) {
+            const edge = this.#edges.get(uid);
+            if (keep(edge)) out.push(edge);
+        }
+        return out;
+    }
 
     // ── Nodes ─────────────────────────────────────────────────────────────────
 
@@ -318,8 +172,10 @@ class GraphAbstract extends EventBus {
      */
     removeNode(uid) {
         if (!this.#nodes.has(uid)) return false;
-        for (const [edgeUid, edge] of this.#edges) {
-            if (edge.srcUid === uid || edge.targetUid === uid) this.#edges.delete(edgeUid);
+        for (const edgeUid of [...(this.#incident.get(uid) ?? [])]) {
+            const edge = this.#edges.get(edgeUid);
+            this.#edges.delete(edgeUid);
+            this.#untouch(edge);
         }
         this.#nodes.delete(uid);
         this.emit('nodes:changed', { op: 'remove', uid });
@@ -363,6 +219,7 @@ class GraphAbstract extends EventBus {
         }
         const edge = { uid: edgeUid, srcUid, targetUid, type, data };
         this.#edges.set(edgeUid, edge);
+        this.#touch(edge);
         this.emit('edges:changed', { op: 'add', uid: edgeUid });
         return edge;
     }
@@ -371,8 +228,10 @@ class GraphAbstract extends EventBus {
      * Remove a single edge by uid. Returns true if it existed.
      */
     removeEdge(uid) {
-        if (!this.#edges.has(uid)) return false;
+        const edge = this.#edges.get(uid);
+        if (!edge) return false;
         this.#edges.delete(uid);
+        this.#untouch(edge);
         this.emit('edges:changed', { op: 'remove', uid });
         return true;
     }
@@ -391,8 +250,7 @@ class GraphAbstract extends EventBus {
      * @returns {object[]} edge[]
      */
     getOutgoing(srcUid, type) {
-        const all = getOutgoingEdges(srcUid, this.#edges);
-        return type !== undefined ? all.filter(e => e.type === type) : all;
+        return this.#edgesAt(srcUid, (e) => e.srcUid === srcUid && (type === undefined || e.type === type));
     }
 
     /**
@@ -402,8 +260,7 @@ class GraphAbstract extends EventBus {
      * @returns {object[]} edge[]
      */
     getIncoming(targetUid, type) {
-        const all = getIncomingEdges(targetUid, this.#edges);
-        return type !== undefined ? all.filter(e => e.type === type) : all;
+        return this.#edgesAt(targetUid, (e) => e.targetUid === targetUid && (type === undefined || e.type === type));
     }
 
     /**
@@ -413,8 +270,7 @@ class GraphAbstract extends EventBus {
      * @returns {object[]} edge[]
      */
     getEdgesOf(nodeUid, type) {
-        const all = getEdgesOfNode(nodeUid, this.#edges);
-        return type !== undefined ? all.filter(e => e.type === type) : all;
+        return this.#edgesAt(nodeUid, (e) => type === undefined || e.type === type);
     }
 
     /**
@@ -474,8 +330,9 @@ class GraphAbstract extends EventBus {
     hydrate(snapshot) {
         this.#nodes.clear();
         this.#edges.clear();
+        this.#incident.clear();
         for (const n of snapshot.nodes ?? []) this.#nodes.set(n.uid, n);
-        for (const e of snapshot.edges ?? []) this.#edges.set(e.uid, e);
+        for (const e of snapshot.edges ?? []) { const was = this.#edges.get(e.uid); if (was) this.#untouch(was); this.#edges.set(e.uid, e); this.#touch(e); }
     }
 
     /**
@@ -1169,6 +1026,183 @@ function registerLinkType(name, config) {
 }
 
 /**
+ * Graph traversal — pure graph algorithms over Map<uid, node> / Map<uid, edge>.
+ * No DOM, no rendering, no layout concerns.
+ * All functions are stateless and composable.
+ *
+ * Return type convention:
+ *   All node-returning functions return node objects (not uid strings).
+ *   Callers that only need UIDs can map: result.map(n => n.uid)
+ */
+
+/**
+ * Returns direct children of parentUid.
+ * Children are nodes whose links array contains a link pointing to parentUid.
+ * (Link direction: child.links[].targetUid === parent.uid)
+ *
+ * @param {string} parentUid
+ * @param {Map}    nodes       Map<uid, node>
+ * @returns {object[]} node[]
+ */
+function getChildren(parentUid, nodes) {
+    return [...nodes.values()].filter(node =>
+        node.links?.some(link => link.targetUid === parentUid)
+    );
+}
+
+/**
+ * Returns all descendants of rootUid (recursive, depth-first).
+ * Returns node objects for consistency with getChildren / getParents.
+ *
+ * @param {string} rootUid
+ * @param {Map}    nodes
+ * @returns {object[]} node[]
+ */
+function getDescendants(rootUid, nodes) {
+    const descendants = [];
+    const visited = new Set();
+
+    const visit = (uid) => {
+        getChildren(uid, nodes).forEach(child => {
+            if (visited.has(child.uid)) return;
+            visited.add(child.uid);
+            descendants.push(child);
+            visit(child.uid);
+        });
+    };
+
+    visit(rootUid);
+    return descendants;
+}
+
+/**
+ * Returns direct parents of nodeUid.
+ * Parents are the nodes that nodeUid links to (nodeUid.links[].targetUid).
+ *
+ * @param {string} nodeUid
+ * @param {Map}    nodes
+ * @returns {object[]} node[]
+ */
+function getParents(nodeUid, nodes) {
+    const node = nodes.get(nodeUid);
+    if (!node?.links?.length) return [];
+    return node.links.map(link => nodes.get(link.targetUid)).filter(Boolean);
+}
+
+/**
+ * Returns all ancestors of nodeUid (recursive, follows parent chain upward).
+ * Returns node objects for consistency.
+ *
+ * @param {string} nodeUid
+ * @param {Map}    nodes
+ * @returns {object[]} node[]
+ */
+function getAncestors(nodeUid, nodes) {
+    const ancestors = new Map();   // uid → node, preserves insertion order, no dupes
+
+    const visit = (uid) => {
+        getParents(uid, nodes).forEach(parent => {
+            if (!ancestors.has(parent.uid)) {
+                ancestors.set(parent.uid, parent);
+                visit(parent.uid);
+            }
+        });
+    };
+
+    visit(nodeUid);
+    return [...ancestors.values()];
+}
+
+/**
+ * Returns root nodes — nodes with no outgoing links (no parents).
+ *
+ * @param {Map} nodes
+ * @returns {object[]} node[]
+ */
+function getRoots(nodes) {
+    return [...nodes.values()].filter(node => !node.links?.length);
+}
+
+/**
+ * Returns all edges connected to a node (as source or target).
+ *
+ * @param {string} nodeUid
+ * @param {Map}    edges    Map<uid, edge>
+ * @returns {object[]} edge[]
+ */
+function getEdgesOfNode(nodeUid, edges) {
+    return [...edges.values()].filter(
+        edge => edge.srcUid === nodeUid || edge.targetUid === nodeUid
+    );
+}
+
+/**
+ * Returns edges where nodeUid is the source.
+ *
+ * @param {string} nodeUid
+ * @param {Map}    edges
+ * @returns {object[]} edge[]
+ */
+function getOutgoingEdges(nodeUid, edges) {
+    return [...edges.values()].filter(edge => edge.srcUid === nodeUid);
+}
+
+/**
+ * Returns edges where nodeUid is the target.
+ *
+ * @param {string} nodeUid
+ * @param {Map}    edges
+ * @returns {object[]} edge[]
+ */
+function getIncomingEdges(nodeUid, edges) {
+    return [...edges.values()].filter(edge => edge.targetUid === nodeUid);
+}
+
+/**
+ * Checks whether two nodes share at least one common parent.
+ *
+ * @param {string} uidA
+ * @param {string} uidB
+ * @param {Map}    nodes
+ * @returns {object|false} The shared parent node, or false
+ */
+function findCommonParent(uidA, uidB, nodes) {
+    const parentsA = new Set(getParents(uidA, nodes).map(n => n.uid));
+    for (const parent of getParents(uidB, nodes)) {
+        if (parentsA.has(parent.uid)) return parent;
+    }
+    return false;
+}
+
+/**
+ * Returns the depth of a node from the nearest root (0 = root itself).
+ *
+ * @param {string} nodeUid
+ * @param {Map}    nodes
+ * @returns {number}
+ */
+function getDepth(nodeUid, nodes) {
+    const visited = new Set();
+    let depth   = 0;
+    let current = [nodeUid];
+
+    while (current.length) {
+        const next = [];
+        for (const uid of current) {
+            if (visited.has(uid)) continue;
+            visited.add(uid);
+            const parents = getParents(uid, nodes);
+            if (!parents.length) return depth;
+            next.push(...parents.map(p => p.uid));
+        }
+        current = next;
+        depth++;
+    }
+
+    return depth;
+}
+
+/**
  * GraphStore — the central headless state container.
  *
  * Owns all graph data (nodes, edges), drives layout, and emits events.
@@ -1857,9 +1891,16 @@ class GraphStore extends EventBus {
     getParents(uid)              { return getParents(uid, this.#nodes); }
     getAncestors(uid)            { return getAncestors(uid, this.#nodes); }
     getRoots()                   { return getRoots(this.#nodes); }
-    getEdgesOfNode(uid)          { return getEdgesOfNode(uid, this.#edges); }
-    getOutgoingEdges(uid)        { return getOutgoingEdges(uid, this.#edges); }
-    getIncomingEdges(uid)        { return getIncomingEdges(uid, this.#edges); }
+    // read through the per-node index the store already keeps (#adjacency), in the order the edges were added
+    getEdgesOfNode(uid)          { return this.#edgesAt(uid, () => true); }
+    getOutgoingEdges(uid)        { return this.#edgesAt(uid, (e) => e.srcUid === uid); }
+    getIncomingEdges(uid)        { return this.#edgesAt(uid, (e) => e.targetUid === uid); }
+
+    #edgesAt(uid, keep) {
+        const out = [];
+        for (const eid of this.#adjacency.get(uid) ?? []) { const e = this.#edges.get(eid); if (e && keep(e)) out.push(e); }
+        return out;
+    }
     findCommonParent(uidA, uidB) { return findCommonParent(uidA, uidB, this.#nodes); }
     getDepth(uid)                { return getDepth(uid, this.#nodes); }
 
@@ -2501,6 +2542,84 @@ function allPaths(graph, fromUid, toUid, options = {}) {
     const visited = new Set([fromUid]);
     dfs(fromUid, [fromUid], 0, visited);
     return results;
+}
+
+/**
+ * @file graph-view.js
+ * Read-only views of a graph, and the two structural facts an L2 needs to state about one: the order of a node's
+ * lines, and which kinds of node a kind of line may join.
+ *
+ *   viewOf(graph, { node })      the graph seen through a filter on its nodes — only the nodes that pass, and only
+ *                                the edges between two of them. It answers what the algorithms ask of a graph
+ *                                (getNodes, getNode, hasNode, getEdges, getOutgoing, getIncoming, getEdgesOf), so
+ *                                propagate / reachable / shortestPath / allPaths run over a view unchanged. A view
+ *                                holds no copy: it reads the graph as it is at each call.
+ *   ordered(edges)               edges in their stated order: by `data.order` (a number), then as they were added.
+ *   checkJoins(graph, rules)     which edges join kinds of node their type does not allow.
+ *
+ * Pure: no domain knowledge, no DOM.
+ */
+
+/**
+ * @param {object} graph   a GraphAbstract, or another view
+ * @param {object} filter
+ * @param {(node: object) => boolean} filter.node   which nodes are in the view
+ * @returns {object} the view (read-only)
+ */
+function viewOf(graph, { node: keep }) {
+    if (typeof keep !== 'function') throw new Error('[graph-headless] viewOf needs { node: (node) => boolean }');
+    const has = (uid) => { const n = graph.getNode(uid); return !!n && keep(n); };
+    const between = (e) => has(e.srcUid) && has(e.targetUid);
+    const view = {
+        getNodes:    () => graph.getNodes().filter(keep),
+        getNode:     (uid) => (has(uid) ? graph.getNode(uid) : null),
+        hasNode:     has,
+        nodeCount:   () => view.getNodes().length,
+        getEdges:    () => graph.getEdges().filter(between),
+        getEdge:     (uid) => { const e = graph.getEdge(uid); return e && between(e) ? e : null; },
+        edgeCount:   () => view.getEdges().length,
+        getOutgoing: (uid, type) => (has(uid) ? graph.getOutgoing(uid, type).filter((e) => has(e.targetUid)) : []),
+        getIncoming: (uid, type) => (has(uid) ? graph.getIncoming(uid, type).filter((e) => has(e.srcUid)) : []),
+        getEdgesOf:  (uid, type) => (has(uid) ? graph.getEdgesOf(uid, type).filter(between) : []),
+        getNodesByType: (type) => view.getNodes().filter((n) => n.type === type),
+        getEdgesByType: (type) => view.getEdges().filter((e) => e.type === type),
+    };
+    return Object.freeze(view);
+}
+
+/**
+ * Edges in their stated order — for lines whose order means something (the first and second child of a node in a
+ * syntax tree, the arguments of a call). Order is `data.order` (a number), lowest first; edges without one follow, in
+ * the order given. Stable. Returns a new array.
+ */
+function ordered(edges) {
+    const at = (e) => (typeof e?.data?.order === 'number' && Number.isFinite(e.data.order) ? e.data.order : Infinity);
+    return edges.map((e, i) => [e, at(e), i]).sort((x, y) => (x[1] - y[1]) || (x[2] - y[2])).map(([e]) => e);
+}
+
+/**
+ * Which edges join kinds of node their type does not allow.
+ *
+ * @param {object} graph   a graph or a view
+ * @param {{ [edgeType: string]: { pairs: [string, string][] } | { from: string[], to: string[] } }} rules   for each
+ *        governed edge type, the joins it may make: `pairs` lists each allowed [fromType, toType] (a Petri net's arc:
+ *        [['place', 'transition'], ['transition', 'place']]); `from` / `to` allow any of those to any of these.
+ *        Edges of a type not named are not governed.
+ * @returns {{ edge: string, type: string, from: string, to: string, fromType: string|null, toType: string|null }[]}
+ *          in the graph's edge order — empty when every governed edge is allowed
+ */
+function checkJoins(graph, rules) {
+    const out = [];
+    for (const e of graph.getEdges()) {
+        const rule = rules[e.type];
+        if (!rule) continue;
+        const fromType = graph.getNode(e.srcUid)?.type ?? null;
+        const toType = graph.getNode(e.targetUid)?.type ?? null;
+        const pairs = rule.pairs ?? null;
+        const allowed = pairs ? pairs.some(([a, b]) => a === fromType && b === toType) : rule.from.includes(fromType) && rule.to.includes(toType);
+        if (!allowed) out.push({ edge: e.uid, type: e.type, from: e.srcUid, to: e.targetUid, fromType, toType });
+    }
+    return out;
 }
 
 /**
@@ -3790,6 +3909,7 @@ exports.PresenceState = PresenceState;
 exports.SelectionManager = SelectionManager;
 exports.SessionLog = SessionLog;
 exports.allPaths = allPaths;
+exports.checkJoins = checkJoins;
 exports.computeLayout = computeLayout;
 exports.computeNodeLinkPath = computeNodeLinkPath;
 exports.computeNodePosition = computeNodePosition;
@@ -3819,6 +3939,7 @@ exports.getPortDots = getPortDots;
 exports.getPortSvgPos = getPortSvgPos;
 exports.getRoots = getRoots;
 exports.horizontalLinkPath = horizontalLinkPath;
+exports.ordered = ordered;
 exports.parse = parse;
 exports.patchNodeType = patchNodeType;
 exports.polylinePath = polylinePath;
@@ -3832,4 +3953,5 @@ exports.serialize = serialize;
 exports.setXmlParser = setXmlParser;
 exports.shortestPath = shortestPath;
 exports.smoothPolylinePath = smoothPolylinePath;
+exports.viewOf = viewOf;
 //# sourceMappingURL=graph-headless.cjs.map

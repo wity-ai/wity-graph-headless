@@ -37,12 +37,41 @@
  */
 
 import { EventBus }                              from './event-bus.js';
-import { getOutgoingEdges, getIncomingEdges,
-         getEdgesOfNode }                        from './graph-traversal.js';
 
 export class GraphAbstract extends EventBus {
     #nodes = new Map();   // uid → node
     #edges = new Map();   // uid → edge
+    // Per node, the uids of the edges that touch it, in the order the edges were added — so "the edges of this node"
+    // costs its own edges, not every edge of the graph. A stored edge's ends never change (an update keeps them),
+    // so the index only changes where edges are added or removed.
+    #incident = new Map();   // nodeUid → Set<edgeUid>
+
+    #touch(edge) {
+        for (const end of edge.srcUid === edge.targetUid ? [edge.srcUid] : [edge.srcUid, edge.targetUid]) {
+            let set = this.#incident.get(end);
+            if (!set) this.#incident.set(end, (set = new Set()));
+            set.add(edge.uid);
+        }
+    }
+
+    #untouch(edge) {
+        for (const end of [edge.srcUid, edge.targetUid]) {
+            const set = this.#incident.get(end);
+            if (!set) continue;
+            set.delete(edge.uid);
+            if (!set.size) this.#incident.delete(end);
+        }
+    }
+
+    /** The edges touching a node, in insertion order, kept to those that pass `keep`. */
+    #edgesAt(nodeUid, keep) {
+        const out = [];
+        for (const uid of this.#incident.get(nodeUid) ?? []) {
+            const edge = this.#edges.get(uid);
+            if (keep(edge)) out.push(edge);
+        }
+        return out;
+    }
 
     // ── Nodes ─────────────────────────────────────────────────────────────────
 
@@ -85,8 +114,10 @@ export class GraphAbstract extends EventBus {
      */
     removeNode(uid) {
         if (!this.#nodes.has(uid)) return false;
-        for (const [edgeUid, edge] of this.#edges) {
-            if (edge.srcUid === uid || edge.targetUid === uid) this.#edges.delete(edgeUid);
+        for (const edgeUid of [...(this.#incident.get(uid) ?? [])]) {
+            const edge = this.#edges.get(edgeUid);
+            this.#edges.delete(edgeUid);
+            this.#untouch(edge);
         }
         this.#nodes.delete(uid);
         this.emit('nodes:changed', { op: 'remove', uid });
@@ -130,6 +161,7 @@ export class GraphAbstract extends EventBus {
         }
         const edge = { uid: edgeUid, srcUid, targetUid, type, data };
         this.#edges.set(edgeUid, edge);
+        this.#touch(edge);
         this.emit('edges:changed', { op: 'add', uid: edgeUid });
         return edge;
     }
@@ -138,8 +170,10 @@ export class GraphAbstract extends EventBus {
      * Remove a single edge by uid. Returns true if it existed.
      */
     removeEdge(uid) {
-        if (!this.#edges.has(uid)) return false;
+        const edge = this.#edges.get(uid);
+        if (!edge) return false;
         this.#edges.delete(uid);
+        this.#untouch(edge);
         this.emit('edges:changed', { op: 'remove', uid });
         return true;
     }
@@ -158,8 +192,7 @@ export class GraphAbstract extends EventBus {
      * @returns {object[]} edge[]
      */
     getOutgoing(srcUid, type) {
-        const all = getOutgoingEdges(srcUid, this.#edges);
-        return type !== undefined ? all.filter(e => e.type === type) : all;
+        return this.#edgesAt(srcUid, (e) => e.srcUid === srcUid && (type === undefined || e.type === type));
     }
 
     /**
@@ -169,8 +202,7 @@ export class GraphAbstract extends EventBus {
      * @returns {object[]} edge[]
      */
     getIncoming(targetUid, type) {
-        const all = getIncomingEdges(targetUid, this.#edges);
-        return type !== undefined ? all.filter(e => e.type === type) : all;
+        return this.#edgesAt(targetUid, (e) => e.targetUid === targetUid && (type === undefined || e.type === type));
     }
 
     /**
@@ -180,8 +212,7 @@ export class GraphAbstract extends EventBus {
      * @returns {object[]} edge[]
      */
     getEdgesOf(nodeUid, type) {
-        const all = getEdgesOfNode(nodeUid, this.#edges);
-        return type !== undefined ? all.filter(e => e.type === type) : all;
+        return this.#edgesAt(nodeUid, (e) => type === undefined || e.type === type);
     }
 
     /**
@@ -241,8 +272,9 @@ export class GraphAbstract extends EventBus {
     hydrate(snapshot) {
         this.#nodes.clear();
         this.#edges.clear();
+        this.#incident.clear();
         for (const n of snapshot.nodes ?? []) this.#nodes.set(n.uid, n);
-        for (const e of snapshot.edges ?? []) this.#edges.set(e.uid, e);
+        for (const e of snapshot.edges ?? []) { const was = this.#edges.get(e.uid); if (was) this.#untouch(was); this.#edges.set(e.uid, e); this.#touch(e); }
     }
 
     /**

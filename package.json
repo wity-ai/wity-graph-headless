@@ -1,6 +1,6 @@
 {
   "name": "@wity/graph-headless",
-  "version": "0.2.17",
+  "version": "0.3.0",
   "description": "Headless, ontologically-grounded directed graph library. Pure state, layout, traversal, and geometry — zero DOM dependencies.",
   "type": "module",
   "main": "./dist/graph-headless.cjs",
@@ -13,7 +13,8 @@
     }
   },
   "scripts": {
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "test": "node --test test/"
   },
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",

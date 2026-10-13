@@ -70,6 +70,10 @@ export {
     allPaths,
 } from './core/graph-algorithms.js';
 
+// ─── Views, order, joins ─────────────────────────────────────────────────────
+
+export { viewOf, ordered, checkJoins } from './core/graph-view.js';
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 export { computeLayout, computeNodePosition } from './layout/horizontal-tree.js';
